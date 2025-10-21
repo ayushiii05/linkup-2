@@ -7,21 +7,46 @@ import moment from 'moment';
 import { Link } from 'react-router-dom';
 import UserProfileInfo from '../components/UserProfileInfo';
 import ProfileModal from '../components/ProfileModal';
+import { useAuth } from '@clerk/clerk-react';
+import { useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
+import api from '../api/axios';
 
 const Profile = () => {
+
+const currentUser = useSelector((state) => state.user.value)
+
+  const {getToken} = useAuth()
   const {profileId} = useParams()
   const [user, setUser] = useState(null)
   const [posts, setPosts] = useState([])
   const [activeTab, setActiveTab] = useState('posts')
   const [showEdit, setShowEdit] = useState(false)
 
-  const fetchUser = async () =>{
-    setUser(dummyUserData)
-    setPosts(dummyPostsData)
+  const fetchUser = async (profileId) =>{
+    const token = await getToken()
+
+    try {
+  const { data } = await api.post(`/api/user/profiles`, {profileId}, {
+    headers: {Authorization: `Bearer ${token}`}
+  })
+  if(data.success){
+    setUser(data.profile)
+    setPosts(data.posts)
+  }else{
+    toast.error()
   }
-  useEffect(()=>{
-fetchUser()
-  },[])
+} catch (error) {
+  toast.error(error.message)
+}
+  }
+    useEffect(()=>{
+      if(profileId){
+        fetchUser(profileId)
+      } else{
+fetchUser(currentUser._id)
+      }
+  },[profileId, currentUser])
   return user ? (
     <div className='relative h-full overflow-y-scroll bg-gray-50 p-6'>
 <div className='max-w-3xl mx-auto'>
@@ -29,7 +54,7 @@ fetchUser()
 <div className='bg-white rounded-2xl shadow overflow-hidden'> 
 <div className='h-40 md:h-56 bg-gradient-to-r from-indigo-200
 via-purple-200 to-pink-200'>
-  {user.cover_photo && <img src={user.cover_photo} alt=''className='w-full h-full object-cover' />}
+  {user.cover_photo && <img src={user.cover_photo} alt='coverphoto' className='w-full h-full object-cover'/>}
 
 </div>
 {/* user info */}
