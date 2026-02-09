@@ -4,6 +4,7 @@ import Connection from "../models/Connection.js";
 import sendEmail from "../configs/nodeMailer.js";
 import Story from "../models/Story.js";
 import Message from "../models/Message.js";
+import ScheduledMessage from "../models/ScheduledMessage.js";
 import { isObjectIdOrHexString } from "mongoose";
 //import { Inngest } from "inngest/dist/index.mjs";
 //const { Inngest } = await import("inngest/dist/index.mjs");
@@ -19,66 +20,66 @@ import { isObjectIdOrHexString } from "mongoose";
 export const inngest = new Inngest({ id: "LinkUp-app" });
 //inngest function to save user data
 const syncUserCreation = inngest.createFunction(
-    {id: 'sync-user-from-clerk'},
-    {event: 'clerk/user.created'},
-    async ({event})=> {
-const {id, first_name, last_name, email_addresses, image_url} = event.data
+    { id: 'sync-user-from-clerk' },
+    { event: 'clerk/user.created' },
+    async ({ event }) => {
+        const { id, first_name, last_name, email_addresses, image_url } = event.data
 
-let username = email_addresses[0].email_address.split('@')[0]
-//check availability of username
-const user = await User.findOne({username})
-if (user) {
-    username = username + Math.floor(Math.random() * 10000)
-}
-const userData = {
-    _id : id,
-    email: email_addresses[0].email_address,
-    full_name: first_name + " " + last_name,
-    profile_picture: image_url,
-    username
-}
-await User.create(userData)
+        let username = email_addresses[0].email_address.split('@')[0]
+        //check availability of username
+        const user = await User.findOne({ username })
+        if (user) {
+            username = username + Math.floor(Math.random() * 10000)
+        }
+        const userData = {
+            _id: id,
+            email: email_addresses[0].email_address,
+            full_name: first_name + " " + last_name,
+            profile_picture: image_url,
+            username
+        }
+        await User.create(userData)
     })
-    // inggest function to update user data
+// inggest function to update user data
 
-    const syncUserUpdation = inngest.createFunction(
-    {id: 'update-user-from-clerk'},
-    {event: 'clerk/user.updated'},
-    async ({event})=> {
-const {id, first_name, last_name, email_addresses, image_url} = event.data
+const syncUserUpdation = inngest.createFunction(
+    { id: 'update-user-from-clerk' },
+    { event: 'clerk/user.updated' },
+    async ({ event }) => {
+        const { id, first_name, last_name, email_addresses, image_url } = event.data
 
-const updatedUserData = {
-    email: email_addresses[0].email_address,
-    full_name: first_name + ' ' + last_name,
-    profile_picture: image_url
-}
-await User.findByIdAndUpdate(id, updatedUserData)
+        const updatedUserData = {
+            email: email_addresses[0].email_address,
+            full_name: first_name + ' ' + last_name,
+            profile_picture: image_url
+        }
+        await User.findByIdAndUpdate(id, updatedUserData)
     }
 )
 
 // inngest function to delete user data in database
 const syncUserDeletion = inngest.createFunction(
-    {id: 'delete-user-with-clerk'},
-    {event: 'clerk/user.deleted'},
-    async ({event})=> {
-const {id} = event.data
-await User.findByIdAndDelete(id)
+    { id: 'delete-user-with-clerk' },
+    { event: 'clerk/user.deleted' },
+    async ({ event }) => {
+        const { id } = event.data
+        await User.findByIdAndDelete(id)
 
- 
+
     }
 )
 // inggest function to send reminder when a new connection is added
 const sendNewConnectionRequestReminder = inngest.createFunction(
-    {id: 'send-new-connection-request-reminder'},
-    {event: "app/connection-request"},
+    { id: 'send-new-connection-request-reminder' },
+    { event: "app/connection-request" },
     async ({ event, step }) => {
-    const {connectionId} = event.data;
+        const { connectionId } = event.data;
 
-    await step.run('send-connection-request-mail', async (params) => {
-        const connection = await Connection.findById(connectionId).populate('from_user_id to_user_id');
+        await step.run('send-connection-request-mail', async (params) => {
+            const connection = await Connection.findById(connectionId).populate('from_user_id to_user_id');
 
-        const subject = `New Connection Request`;
-        const body = `<div style="font-family: Arial, sans-serif; padding: 20px;">
+            const subject = `New Connection Request`;
+            const body = `<div style="font-family: Arial, sans-serif; padding: 20px;">
         <h2> Hi ${connection.to_user_id.full_name},</h2>
         <p>you have a new connection request from ${connection.from_user_id.full_name} - @${connection.from_user_id.username}<p/>
         <p>Click <a href="${process.env.FRONTEND_URL}/connections" style="color:#10b981;">here</a> to accept or reject the request</p>
@@ -86,23 +87,23 @@ const sendNewConnectionRequestReminder = inngest.createFunction(
         <p>Thanks,<br/>PingUp - Stay Connected</P>
         </div>`;
 
-    await sendEmail({
-        to: connection.to_user_id.email,
-        subject,
-        body
-    })
-    }
-) 
-const in24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
-await step.sleepUntil("wait-for-24-hours", in24Hours);
-await step.run('send-connection-request-reminder', async (params) => {
-    const connection = await Connection.findById(connectionId).populate('from_user_id to_user_id');
-    if(connection.status === "accepted"){
-        return {message: "Already accepted"}
-    }
+            await sendEmail({
+                to: connection.to_user_id.email,
+                subject,
+                body
+            })
+        }
+        )
+        const in24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await step.sleepUntil("wait-for-24-hours", in24Hours);
+        await step.run('send-connection-request-reminder', async (params) => {
+            const connection = await Connection.findById(connectionId).populate('from_user_id to_user_id');
+            if (connection.status === "accepted") {
+                return { message: "Already accepted" }
+            }
 
-     const subject = `New Connection Request`;
-        const body = `<div style="font-family: Arial, sans-serif; padding: 20px;">
+            const subject = `New Connection Request`;
+            const body = `<div style="font-family: Arial, sans-serif; padding: 20px;">
         <h2> Hi ${connection.to_user_id.full_name},</h2>
         <p>you have a new connection request from ${connection.from_user_id.full_name} - @${connection.from_user_id.username}<p/>
         <p>Click <a href="${process.env.FRONTEND_URL}/connections" style="color:#10b981;">here</a> to accept or reject the request</p>
@@ -110,37 +111,37 @@ await step.run('send-connection-request-reminder', async (params) => {
         <p>Thanks,<br/>PingUp - Stay Connected</P>
         </div>`;
 
-    await sendEmail({
-        to: connection.to_user_id.email,
-        subject,
-        body
-    })
-return {message: "Reminder sent."}
-})
-}
+            await sendEmail({
+                to: connection.to_user_id.email,
+                subject,
+                body
+            })
+            return { message: "Reminder sent." }
+        })
+    }
 )
 //inngest function to delete story after 24 hours of creation
 const deleteStory = inngest.createFunction(
-    {id: 'story-delete'},
-    {event: 'app/story.delete'},
-    async ({event, step})=>{
-const {storyId} = event.data;
-const in24Hours = new Date(Date.now() + 24*60*60*1000)
-await step.sleepUntil('wait-for-24-hours', in24Hours)
-await step.run('delete-story', async ()=>{
-    await Story.findByIdAndDelete(storyId)
-    return {message: 'Story deleted.'}
-})
+    { id: 'story-delete' },
+    { event: 'app/story.delete' },
+    async ({ event, step }) => {
+        const { storyId } = event.data;
+        const in24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000)
+        await step.sleepUntil('wait-for-24-hours', in24Hours)
+        await step.run('delete-story', async () => {
+            await Story.findByIdAndDelete(storyId)
+            return { message: 'Story deleted.' }
+        })
     }
-    
+
 )
 const sendNotificationofUnseenMessages = inngest.createFunction(
-    {id: 'send-unseen-messages-notification'},
-    {cron: "TZ=America/New_York 0 9 * * *"},
-    async ({step}) => {
-        const messages = await Message.find({seen: false}).populate('to_user_id');
+    { id: 'send-unseen-messages-notification' },
+    { cron: "TZ=America/New_York 0 9 * * *" },
+    async ({ step }) => {
+        const messages = await Message.find({ seen: false }).populate('to_user_id');
         const unseenCount = {};
-        messages.map(message=> {
+        messages.map(message => {
             unseenCount[message.to_user_id._id] = (unseenCount[message.to_user_id._id] || 0) + 1;
 
         })
@@ -155,25 +156,69 @@ const sendNotificationofUnseenMessages = inngest.createFunction(
         <br/>
         <p>Thanks,<br/>PingUp - Stay Connected</p>
         </div>`;
-        await sendEmail({
-            to: user.email,
-            subject,
-            body
-        })
-            
-         }
-         return {message: 'Notification sent.'}
+            await sendEmail({
+                to: user.email,
+                subject,
+                body
+            })
+
         }
+        return { message: 'Notification sent.' }
+    }
 )
 
+// Inngest function to send scheduled messages at the scheduled time
+const sendScheduledMessage = inngest.createFunction(
+    { id: 'send-scheduled-message' },
+    { event: 'app/message.scheduled' },
+    async ({ event, step }) => {
+        const { scheduledMessageId } = event.data;
 
+        // Get the scheduled message
+        const scheduledMessage = await ScheduledMessage.findById(scheduledMessageId);
+        if (!scheduledMessage || scheduledMessage.status !== 'pending') {
+            return { message: 'Scheduled message not found or already processed' }
+        }
+
+        // Wait until the scheduled time
+        await step.sleepUntil('wait-for-scheduled-time', scheduledMessage.scheduled_time);
+
+        // Check again if still pending (user might have cancelled)
+        await step.run('send-message', async () => {
+            const msg = await ScheduledMessage.findById(scheduledMessageId);
+            if (!msg || msg.status !== 'pending') {
+                return { message: 'Message was cancelled or already sent' }
+            }
+
+            // Create the actual message
+            const message = await Message.create({
+                from_user_id: msg.from_user_id,
+                to_user_id: msg.to_user_id,
+                text: msg.text,
+                message_type: 'text',
+                media_url: msg.media_url || ''
+            });
+
+            // Mark scheduled message as sent
+            msg.status = 'sent';
+            await msg.save();
+
+            // Try to send via SSE if user is connected
+            // Note: We can't directly access connections object from inngest
+            // The message will appear when they refresh or receive next update
+
+            return { message: 'Scheduled message sent successfully', messageId: message._id }
+        });
+    }
+)
 
 export const functions = [
     syncUserCreation,
     syncUserUpdation,
-   
+
     syncUserDeletion,
     sendNewConnectionRequestReminder,
     deleteStory,
-    sendNotificationofUnseenMessages
+    sendNotificationofUnseenMessages,
+    sendScheduledMessage
 ];

@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import connectDB from './configs/db.js';
-import {inngest, functions} from './inngest/index.js';
+import { inngest, functions } from './inngest/index.js';
 import { serve } from "inngest/express";
 import { clerkMiddleware } from '@clerk/express'
 import userRouter from './routes/userRoutes.js';
@@ -20,8 +20,15 @@ app.use(express.json());
 app.use(cors());
 app.use(clerkMiddleware());
 
-app.get('/', (req, res)=> res.send('server is runningggg'))
-app.use('/api/inngest', serve({ client: inngest, functions}))
+app.get('/', (req, res) => res.send('server is runningggg'))
+
+// Request Logging Middleware
+app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    next();
+});
+
+app.use('/api/inngest', serve({ client: inngest, functions }))
 app.use('/api/user', userRouter)
 app.use('/api/post', postRouter)
 app.use('/api/story', storyRouter)
@@ -29,4 +36,11 @@ app.use('/api/message', messageRouter)
 
 const PORT = process.env.PORT || 4000;
 
-app.listen(PORT, ()=> console.log(`server is running on port ${PORT}`))
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`server is running on port ${PORT}`);
+        console.log("SERVER RESTARTED WITH FIXES");
+    })
+}
+
+export default app;

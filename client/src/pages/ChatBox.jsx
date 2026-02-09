@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { dummyUserData } from '../assets/assets';
-import { ImageIcon, SendHorizonal } from 'lucide-react';
+import { ImageIcon, SendHorizonal, Clock, X } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams } from 'react-router-dom';
 import api from '../api/axios';
@@ -21,6 +21,11 @@ const ChatBox = () => {
   const [image, setImage] = useState(null);
   const [user, setUser] = useState(dummyUserData);
   const messagesEndRef = useRef(null);
+
+  // Schedule message state
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduling, setScheduling] = useState(false);
 
   // ✅ Fetch messages
   const fetchUserMessages = async () => {
@@ -44,7 +49,7 @@ const ChatBox = () => {
       if (image) formData.append('image', image);
 
       const { data } = await api.post('/api/message/send', formData, {
-        headers: { Authorization:`Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (data.success) {
@@ -59,10 +64,53 @@ const ChatBox = () => {
     }
   };
 
-  // ✅ Load messages when user changes
+  // Schedule message handler
+  const scheduleMessage = async () => {
+    try {
+      if (!text || !scheduledTime) {
+        toast.error('Please enter a message and select a time');
+        return;
+      }
+
+      setScheduling(true);
+      const token = await getToken();
+
+      const { data } = await api.post('/api/message/schedule', {
+        to_user_id: userId,
+        text: text,
+        scheduled_time: scheduledTime
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (data.success) {
+        toast.success('Message scheduled!');
+        setText('');
+        setScheduledTime('');
+        setShowScheduleModal(false);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to schedule message');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // ✅ Load messages when user changes + poll every 5 seconds
   useEffect(() => {
     fetchUserMessages();
-    return () => dispatch(resetMessages());
+
+    // Poll for new messages every 5 seconds (for scheduled messages)
+    const pollInterval = setInterval(() => {
+      fetchUserMessages();
+    }, 5000);
+
+    return () => {
+      clearInterval(pollInterval);
+      dispatch(resetMessages());
+    };
   }, [userId]);
 
   // ✅ Set the user for chat
@@ -77,6 +125,13 @@ const ChatBox = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Get minimum datetime (now + 1 minute)
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    return now.toISOString().slice(0, 16);
+  };
 
   // ✅ Safe sort (no .toSorted)
   const sortedMessages = [...messages].sort(
@@ -101,14 +156,12 @@ const ChatBox = () => {
             {sortedMessages.map((message) => (
               <div
                 key={message._id || message.id || `${message.createdAt}-${Math.random()}`}
-                className={`flex flex-col ${
-                  message.to_user_id !== user._id ? 'items-start' : 'items-end'
-                }`}
+                className={`flex flex-col ${message.to_user_id !== user._id ? 'items-start' : 'items-end'
+                  }`}
               >
                 <div
-                  className={`p-2 text-sm max-w-sm bg-white text-slate-700 rounded-lg shadow ${
-                    message.to_user_id !== user._id ? 'rounded-bl-none' : 'rounded-br-none'
-                  }`}
+                  className={`p-2 text-sm max-w-sm bg-white text-slate-700 rounded-lg shadow ${message.to_user_id !== user._id ? 'rounded-bl-none' : 'rounded-br-none'
+                    }`}
                 >
                   {message.message_type === 'image' && (
                     <img
@@ -117,7 +170,34 @@ const ChatBox = () => {
                       className="w-full max-w-sm rounded-lg mb-1"
                     />
                   )}
-                  <p>{message.text}</p>
+                  {message.message_type === 'post' && message.post_id && (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden mb-2 bg-gray-50">
+                      {/* Shared post header */}
+                      <div className="flex items-center gap-2 p-2 bg-indigo-50">
+                        <img
+                          src={message.post_id.user?.profile_picture || dummyUserData.profile_picture}
+                          alt=""
+                          className="w-6 h-6 rounded-full"
+                        />
+                        <span className="text-xs font-medium text-gray-700">
+                          {message.post_id.user?.full_name || 'User'}
+                        </span>
+                      </div>
+                      {/* Post content */}
+                      {message.post_id.content && (
+                        <p className="px-2 py-1 text-xs text-gray-600 line-clamp-3">{message.post_id.content}</p>
+                      )}
+                      {/* Post image */}
+                      {message.post_id.image_urls?.length > 0 && (
+                        <img
+                          src={message.post_id.image_urls[0]}
+                          alt=""
+                          className="w-full h-32 object-cover"
+                        />
+                      )}
+                    </div>
+                  )}
+                  {message.text && <p>{message.text}</p>}
                 </div>
               </div>
             ))}
@@ -152,6 +232,15 @@ const ChatBox = () => {
               />
             </label>
 
+            {/* Schedule button */}
+            <button
+              onClick={() => setShowScheduleModal(true)}
+              className="text-gray-400 hover:text-indigo-500 p-1 transition-colors"
+              title="Schedule message"
+            >
+              <Clock size={22} />
+            </button>
+
             <button
               onClick={sendMessage}
               className="bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-700 hover:to-purple-800 active:scale-95 cursor-pointer text-white p-2 rounded-full"
@@ -160,6 +249,51 @@ const ChatBox = () => {
             </button>
           </div>
         </div>
+
+        {/* Schedule Modal */}
+        {showScheduleModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Schedule Message</h2>
+                <button onClick={() => setShowScheduleModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Message</label>
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-indigo-500 resize-none h-20"
+                    placeholder="Type your message..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Send at</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    min={getMinDateTime()}
+                    className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <button
+                  onClick={scheduleMessage}
+                  disabled={scheduling || !text || !scheduledTime}
+                  className="w-full py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-colors disabled:opacity-50"
+                >
+                  {scheduling ? 'Scheduling...' : 'Schedule Message'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   );

@@ -1,0 +1,7 @@
+{
+  "commentId": "6987835262ef322225c85f1e",
+  "rawUserId": "user_33LBSpWha2bYfEhJXzWI9chqvBL",
+  "isPopulated": true,
+  "populatedUsername": " ayushiisinghh",
+  "populatedId": "user_33LBSpWha2bYfEhJXzWI9chqvBL"
+}
