@@ -67,20 +67,6 @@ const App = () => {
   return (
     <>
       <Toaster />
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        zIndex: 9999,
-        background: 'red',
-        color: 'white',
-        padding: '10px',
-        width: '100%',
-        textAlign: 'center',
-        fontWeight: 'bold'
-      }}>
-        DEBUG: VITE_BASEURL is: "{import.meta.env.VITE_BASEURL}"
-      </div>
       <Routes>
         <Route path='/' element={!user ? <Login /> : <Layout />}>
           <Route index element={<Feed />} />
